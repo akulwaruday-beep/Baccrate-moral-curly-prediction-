@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baccarat Predictor PWA</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#1f2937" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background:#111827; color:#f9fafb; margin:0; padding:1rem; }
+    h1 { color:#22d3ee; text-align:center; }
+    .card-input { width:100%; padding:0.5rem; margin:0.5rem 0; border-radius:0.5rem; border:1px solid #374151; }
+    .btn { background:#22d3ee; border:none; padding:0.5rem 1rem; margin:0.5rem; border-radius:0.5rem; cursor:pointer; }
+    .btn:hover { background:#0ea5e9; }
+    .results { margin-top:1rem; padding:1rem; border-radius:0.5rem; background:#1f2937; }
+    canvas { margin-top:1rem; background:#1e293b; border-radius:0.5rem; }
+
+    .progress-container { margin-top:1rem; background:#374151; border-radius:1rem; overflow:hidden; }
+    .progress-bar { height:20px; background:#22c55e; width:0%; text-align:center; color:#111827; font-size:0.8rem; }
+  </style>
+</head>
+<body>
+  <h1>🎴 Baccarat Predictor</h1>
+
+  <label>Number of Decks:</label>
+  <input type="number" id="numDecks" class="card-input" value="8" min="1" max="8" />
+
+  <label>Cards dealt so far (comma separated):</label>
+  <input id="seenCards" class="card-input" placeholder="A, K, 5, 3, ..." />
+
+  <button class="btn" onclick="runSimulation()">Run Simulation</button>
+
+  <!-- Shoe progress bar -->
+  <div class="progress-container">
+    <div id="progressBar" class="progress-bar">0%</div>
+  </div>
+
+  <div id="results" class="results">
+    <p>Banker: -- %</p>
+    <p>Player: -- %</p>
+    <p>Tie: -- %</p>
+    <p>Recommendation: --</p>
+  </div>
+
+  <canvas id="resultChart" width="400" height="200"></canvas>
+
+  <script>
+    // --- Baccarat deck setup ---
+    function buildDeck(numDecks) {
+      const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+      const deck = [];
+      for (let d=0; d<numDecks; d++) {
+        for (let r of ranks) {
+          for (let s=0; s<4; s++) {
+            deck.push(r);
+          }
+        }
+      }
+      return deck;
+    }
+
+    // Remove seen cards
+    function removeSeen(deck, seen) {
+      for (let c of seen) {
+        const idx = deck.indexOf(c);
+        if (idx !== -1) deck.splice(idx,1);
+      }
+      return deck;
+    }
+
+    // Simulate single hand (simplified)
+    function simulateHand(deck) {
+      const outcome = Math.random(); // placeholder odds
+      if(outcome < 0.46) return "Banker";
+      if(outcome < 0.92) return "Player";
+      return "Tie";
+    }
+
+    function runSimulation() {
+      const numDecks = parseInt(document.getElementById("numDecks").value) || 8;
+      const seen = document.getElementById("seenCards").value.split(",").map(c=>c.trim().toUpperCase()).filter(c=>c);
+      const totalCards = numDecks * 52;
+
+      let deck = buildDeck(numDecks);
+      deck = removeSeen(deck, seen);
+
+      // Shoe progress
+      const dealt = seen.length;
+      const percent = Math.min(100, ((dealt / totalCards) * 100).toFixed(1));
+      const bar = document.getElementById("progressBar");
+      bar.style.width = percent + "%";
+      bar.textContent = percent + "%";
+
+      // Monte Carlo
+      let bankerWins=0, playerWins=0, ties=0;
+      const trials=5000;
+      for(let i=0;i<trials;i++){
+        const res = simulateHand([...deck]);
+        if(res==="Banker") bankerWins++;
+        else if(res==="Player") playerWins++;
+        else ties++;
+      }
+      const total=bankerWins+playerWins+ties;
+      const bankerP = (bankerWins/total*100).toFixed(1);
+      const playerP = (playerWins/total*100).toFixed(1);
+      const tieP = (ties/total*100).toFixed(1);
+
+      document.getElementById("results").innerHTML = `
+        <p>Banker: ${bankerP} %</p>
+        <p>Player: ${playerP} %</p>
+        <p>Tie: ${tieP} %</p>
+        <p>Recommendation: ${bankerWins>playerWins ? "Bet Banker" : "Bet Player"}</p>
+      `;
+
+      updateChart([bankerP, playerP, tieP]);
+    }
+
+    // --- Chart ---
+    let chart;
+    function updateChart(data) {
+      const ctx=document.getElementById("resultChart").getContext("2d");
+      if(chart) chart.destroy();
+      chart = new Chart(ctx,{
+        type:"pie",
+        data:{
+          labels:["Banker","Player","Tie"],
+          datasets:[{data:data, backgroundColor:["#3b82f6","#22c55e","#eab308"]}]
+        }
+      });
+    }
+
+    // --- Register service worker for PWA ---
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js");
+    }
+  </script>
+</body>
+  </html>
